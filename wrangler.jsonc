@@ -1,7 +1,9 @@
 {
-  "name": "my-app",
-  "compatibility_date": "2026-10-12",
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "taskflow-demo",
+  "compatibility_date": "2026-10-16",
   "assets": {
-    "directory": "dist"
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
   }
 }
