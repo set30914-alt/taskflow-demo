@@ -49,10 +49,10 @@
 .help-list li + li { margin-top: 6px; }
 
 .app-tabbar { --f7-toolbar-height: 64px; }
-.app-tabbar .toolbar-inner { max-width: 800px; margin: 0 auto; }
-.app-tabbar .link { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; color: #475569; text-transform: none; }
+.app-tabbar .toolbar-inner { max-width: 800px; left: 0; right: 0; margin: 0 auto; }
+.app-tabbar .link { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; height: 100%; line-height: 1.2; color: #475569; text-transform: none; }
 .app-tabbar .link .icon { font-size: 22px; }
-.app-tab-label { font-size: 11px; white-space: nowrap; }
+.app-tab-label { font-size: 11px; line-height: 1.2; height: auto; white-space: nowrap; }
 .app-tabbar .app-link-active { color: var(--taskflow-primary); }
 .app-tabbar .link:focus-visible { outline: 2px solid var(--taskflow-primary); outline-offset: -4px; border-radius: 10px; }
 
