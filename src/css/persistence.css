@@ -1,0 +1,51 @@
+/* Практична робота № 7: індикатор локального збереження. */
+.tf7-persistence {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 18px 0;
+  padding: 13px 16px;
+  border: 1px solid #385a7a;
+  border-radius: 12px;
+  background: #142a42;
+  color: #e4f2ff;
+  font-size: 14px;
+}
+
+.tf7-persistence strong { color: #ffffff; }
+.tf7-persistence span { flex: 1 1 240px; }
+.tf7-persistence small { color: #9fb3ca; font-size: 12px; }
+.tf7-persistence--saved { border-color: #327c78; }
+.tf7-persistence--saving { border-color: #b49346; }
+.tf7-persistence--loading { border-color: #557391; }
+.tf7-persistence--error {
+  border-color: #bb5c68;
+  background: #482938;
+}
+
+/* Додаткові завдання 1–2: панель експорту / імпорту */
+.tf7-data-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: -6px 0 18px;
+}
+.tf7-data-tools input[type="file"] { display: none; }
+.tf7-remote { margin: -8px 0 16px; color: #8bdff7; font-size: 13px; }
+
+/* Додаткове завдання 5: сторінка «Налаштування» */
+.tf7-info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-top: 18px; }
+.tf7-info { padding: 16px; border: 1px solid #263a52; border-radius: 14px; background: #142237; color: #edf4ff; }
+.tf7-info span { display: block; color: #aabed5; font-size: 12px; }
+.tf7-info strong { display: block; margin-top: 8px; font-size: 22px; }
+.tf7-table-wrap { overflow-x: auto; margin-top: 10px; }
+.tf7-table { width: 100%; border-collapse: collapse; color: #dbe8f7; font-size: 12px; }
+.tf7-table th, .tf7-table td { padding: 7px 9px; border-bottom: 1px solid #263a52; text-align: left; white-space: nowrap; }
+.tf7-table th { color: #8bdff7; font-weight: 700; }
+
+@media (max-width: 680px) {
+  .tf7-persistence { align-items: flex-start; flex-direction: column; }
+  .tf7-persistence span { flex-basis: auto; }
+}

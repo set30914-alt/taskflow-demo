@@ -29,6 +29,9 @@
       <f7-button outline large href="/help/" class="page-action" aria-label="Довідка з використання TaskFlow">
         <f7-icon f7="question_circle" /> Довідка
       </f7-button>
+      <f7-button outline large href="/settings/" class="page-action" aria-label="Налаштування та локальна база даних">
+        <f7-icon f7="gear_alt" /> Налаштування
+      </f7-button>
     </div>
 
     <template #fixed>

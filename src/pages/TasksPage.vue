@@ -8,9 +8,17 @@ import TaskForm from '../components/TaskForm.vue'
 import TaskListControls from '../components/TaskListControls.vue'
 import { useTasksStore } from '../store/tasks'
 import { useProjectsStore } from '../store/projects'
+import {
+  persistenceState,
+  retrySave,
+  downloadExport,
+  validateImport,
+  applyImport,
+} from '../services/persistence'
 import '../css/task-components.css'
 import '../css/task-form.css'
 import '../css/task-list.css'
+import '../css/persistence.css'
 
 const taskStore = useTasksStore()
 const projectStore = useProjectsStore()
@@ -41,6 +49,59 @@ const newProjectError = ref('')
 const editingTask = computed(() =>
   tasks.value.find((task) => task.id === editingId.value) ?? null,
 )
+// Повідомлення про стан локального збереження
+const saveMessage = computed(() => {
+  if (persistenceState.status === 'loading') return 'Завантаження локальних даних…'
+  if (persistenceState.status === 'saving') return 'Збереження змін у IndexedDB…'
+  if (persistenceState.status === 'saved') return 'Усі зміни збережено в цьому браузері.'
+  return persistenceState.error || 'Помилка локального збереження.'
+})
+
+// Додаткове завдання 4: дата й час останнього успішного збереження
+const lastSavedText = computed(() => (persistenceState.lastSavedAt
+  ? new Intl.DateTimeFormat('uk-UA', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).format(persistenceState.lastSavedAt)
+  : '—'))
+
+// Додаткове завдання 1: експорт JSON
+function exportJson() {
+  const data = downloadExport()
+  feedback.value = `Експортовано: завдань – ${data.tasks.length}, проєктів – ${data.projects.length}.`
+}
+
+// Додаткове завдання 2: імпорт JSON з перевіркою та підтвердженням
+const importInput = ref(null)
+function chooseImport() {
+  importInput.value?.click()
+}
+async function onImportFile(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  let raw
+  try {
+    raw = JSON.parse(await file.text())
+  } catch {
+    feedback.value = 'Імпорт скасовано: файл не є коректним JSON.'
+    return
+  }
+  const result = validateImport(raw)
+  if (!result.ok) {
+    feedback.value = `Імпорт скасовано: ${result.errors.join(' ')}`
+    return
+  }
+  confirmDialog('Імпорт даних',
+    `Замінити поточні дані (${tasks.value.length} завдань, ${projects.value.length} проєктів) `
+    + `даними з файлу (${result.tasks.length} завдань, ${result.projects.length} проєктів)?`,
+    'Імпортувати', () => {
+      applyImport(result)
+      taskStore.resetFilters()
+      feedback.value = `Імпортовано: завдань – ${result.tasks.length}, проєктів – ${result.projects.length}.`
+    })
+}
+
 const activeProjectTitle = computed(() =>
   selectedProject.value === 'all' ? '' : projectStore.projectTitle(selectedProject.value),
 )
@@ -140,11 +201,33 @@ function startWholeProject() {
       <section class="tf3-hero">
         <div class="tf3-eyebrow">TASKFLOW / TASK MANAGER</div>
         <h1>Керування завданнями і проєктами</h1>
-        <p>Pinia забезпечує спільний стан між вкладками без перезавантаження.</p>
+        <p>Pinia керує станом, IndexedDB зберігає завдання та проєкти локально.</p>
         <button type="button" class="tf5-btn tf5-btn--primary tf5-new" @click="startCreate">
           + Додати завдання
         </button>
       </section>
+
+      <section
+        class="tf7-persistence"
+        :class="`tf7-persistence--${persistenceState.status}`"
+        role="status"
+        aria-live="polite"
+      >
+        <strong>Локальне збереження</strong>
+        <span>{{ saveMessage }}</span>
+        <small>Останнє збереження: {{ lastSavedText }}</small>
+        <button v-if="persistenceState.canRetry" type="button" class="tf5-btn" @click="retrySave">
+          Повторити збереження
+        </button>
+      </section>
+
+      <p v-if="persistenceState.remoteUpdate" class="tf7-remote">{{ persistenceState.remoteUpdate }}</p>
+
+      <div class="tf7-data-tools">
+        <button type="button" class="tf5-btn" @click="exportJson">Експорт JSON</button>
+        <button type="button" class="tf5-btn" @click="chooseImport">Імпорт JSON</button>
+        <input ref="importInput" type="file" accept="application/json,.json" @change="onImportFile" />
+      </div>
 
       <p v-if="feedback" class="tf4-feedback" role="status">{{ feedback }}</p>
 
