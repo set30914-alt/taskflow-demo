@@ -5,6 +5,7 @@ import PriorityBadge from './PriorityBadge.vue'
 
 const props = defineProps({
   task: { type: Object, required: true },
+  projectTitle: { type: String, default: 'Загальні' },
   // editable вмикає кнопки «Редагувати» та «Видалити» (сторінка «Мої завдання»)
   editable: { type: Boolean, default: false },
   selected: { type: Boolean, default: false },
@@ -76,6 +77,7 @@ function selectTask() {
           <span v-if="task.category" class="tf3-badge tf4-category">{{ categoryLabels[task.category] }}</span>
         </div>
         <div class="tf3-meta-date">Термін: {{ formattedDate }}</div>
+        <div class="tf3-meta-date tf6-card-project">Проєкт: <b>{{ projectTitle }}</b></div>
       </div>
 
       <div class="tf3-card-actions tf5-card-actions">

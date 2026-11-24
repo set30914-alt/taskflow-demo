@@ -142,3 +142,75 @@
   .tf5-panel { padding: 16px; }
   .tf5-search { grid-column: auto; }
 }
+
+/* Нові стилі роботи № 6: централізоване керування проєктами. */
+.tf6-project-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.tf6-project-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: auto;
+  padding: 9px 12px;
+  border: 1px solid #385a7a;
+  border-radius: 12px;
+  background: #1a344f;
+  color: #e4f2ff;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tf6-project-pill.is-active { border-color: #35b4e5; background: #125d83; }
+.tf6-project-pill strong { min-width: 20px; text-align: center; color: #71d7ff; }
+.tf6-pill-percent { color: #a8efd0; font-size: 11px; }
+
+.tf6-project-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  max-width: 620px;
+}
+.tf6-project-form label {
+  display: grid;
+  gap: 7px;
+  color: #d7e4f5;
+  font-size: 13px;
+  font-weight: 600;
+}
+.tf6-project-form input {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid #39526f;
+  border-radius: 9px;
+  background: #0c1728;
+  color: #f0f7ff;
+  font: inherit;
+  color-scheme: dark;
+}
+.tf6-bulk {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #28435f;
+  color: #d7e4f5; font-size: 13px;
+}
+.tf6-card-project { width: 100%; }
+
+/* Блок проєктів на головній сторінці */
+.tf6-home-projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.tf6-home-project { padding: 16px; border: 1px solid #263a52; border-radius: 14px; background: #142237; color: #edf4ff; }
+.tf6-home-project-title { font-weight: 700; font-size: 15px; }
+.tf6-home-project-meta { margin: 6px 0 10px; color: #aabed5; font-size: 12px; }
+.tf6-mini-track { height: 6px; }
+.tf6-home-project-percent { margin-top: 6px; color: #a8efd0; font-size: 12px; }
+
+@media (max-width: 680px) {
+  .tf6-project-form { grid-template-columns: 1fr; }
+}

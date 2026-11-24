@@ -1,100 +1,49 @@
 <script setup>
 import { ref, computed, nextTick } from 'vue'
+import { storeToRefs } from 'pinia'
 import { f7 } from 'framework7-vue/bundle'
 import AppTabbar from '../components/AppTabbar.vue'
 import TaskCard from '../components/TaskCard.vue'
 import TaskForm from '../components/TaskForm.vue'
 import TaskListControls from '../components/TaskListControls.vue'
-import {
-  taskState,
-  addTask,
-  updateTask,
-  deleteTask,
-  setTaskStatus,
-  setTaskPriority,
-} from '../store/tasks'
+import { useTasksStore } from '../store/tasks'
+import { useProjectsStore } from '../store/projects'
 import '../css/task-components.css'
 import '../css/task-form.css'
 import '../css/task-list.css'
 
-const searchText = ref('')
-const selectedStatus = ref('all')
-const selectedPriority = ref('all')
-const sortOrder = ref('newest')
-const onlyActive = ref(false) // додаткове завдання 1
+const taskStore = useTasksStore()
+const projectStore = useProjectsStore()
 
+// Для деструктуризації реактивного стану й getters використовуємо storeToRefs().
+const {
+  tasks,
+  visibleTasks,
+  visibleDonePercent,
+  searchText,
+  selectedStatus,
+  selectedPriority,
+  selectedProject,
+  sortOrder,
+  onlyActive,
+  onlyNoDueDate,
+} = storeToRefs(taskStore)
+const { projects, projectStats } = storeToRefs(projectStore)
+
+// Стан відкриття форми та поле нового проєкту – локальні: іншим сторінкам вони не потрібні.
 const showForm = ref(false)
 const editingId = ref(null)
 const formAnchor = ref(null)
 const feedback = ref('')
-const selectedTask = ref(null)
+const newProjectTitle = ref('')
+const newProjectError = ref('')
 
-const editingTask = computed(
-  () => taskState.tasks.find((task) => task.id === editingId.value) ?? null,
+const editingTask = computed(() =>
+  tasks.value.find((task) => task.id === editingId.value) ?? null,
 )
-
-// Додаткове завдання 2: порядок статусів «У роботі» → «Заплановано» → «Виконано»
-const statusWeight = { progress: 0, todo: 1, done: 2 }
-
-const visibleTasks = computed(() => {
-  const term = searchText.value.trim().toLocaleLowerCase('uk-UA')
-  const priorityWeight = { high: 3, medium: 2, low: 1 }
-
-  // filter() створює новий масив: вихідний стан не змінюється.
-  const result = taskState.tasks.filter((task) => {
-    const matchesText = !term ||
-      `${task.title} ${task.description ?? ''}`.toLocaleLowerCase('uk-UA').includes(term)
-    const matchesStatus =
-      selectedStatus.value === 'all' || task.status === selectedStatus.value
-    const matchesPriority =
-      selectedPriority.value === 'all' || task.priority === selectedPriority.value
-    const matchesActive = !onlyActive.value || task.status !== 'done'
-
-    return matchesText && matchesStatus && matchesPriority && matchesActive
-  })
-
-  // Сортуємо лише копію, щоб не змінювати taskState.tasks.
-  return result.sort((a, b) => {
-    if (sortOrder.value === 'title') {
-      return a.title.localeCompare(b.title, 'uk-UA') || a.id - b.id
-    }
-    if (sortOrder.value === 'priority') {
-      return priorityWeight[b.priority] - priorityWeight[a.priority] || b.id - a.id
-    }
-    if (sortOrder.value === 'dueDate') {
-      // Порожні дати завжди після заповнених.
-      const first = a.dueDate || '9999-12-31'
-      const second = b.dueDate || '9999-12-31'
-      return first.localeCompare(second) || b.id - a.id
-    }
-    if (sortOrder.value === 'dueDateDesc') {
-      // Додаткове завдання 6: зворотний порядок, порожні дати наприкінці.
-      if (!a.dueDate && !b.dueDate) return b.id - a.id
-      if (!a.dueDate) return 1
-      if (!b.dueDate) return -1
-      return b.dueDate.localeCompare(a.dueDate) || b.id - a.id
-    }
-    if (sortOrder.value === 'status') {
-      return statusWeight[a.status] - statusWeight[b.status] || b.id - a.id
-    }
-    return b.id - a.id
-  })
-})
-
-// Додаткове завдання 3: частка виконаних серед знайдених
-const visibleDonePercent = computed(() => {
-  if (!visibleTasks.value.length) return 0
-  const done = visibleTasks.value.filter((task) => task.status === 'done').length
-  return Math.round((done / visibleTasks.value.length) * 100)
-})
-
-function resetFilters() {
-  searchText.value = ''
-  selectedStatus.value = 'all'
-  selectedPriority.value = 'all'
-  sortOrder.value = 'newest'
-  onlyActive.value = false
-}
+const activeProjectTitle = computed(() =>
+  selectedProject.value === 'all' ? '' : projectStore.projectTitle(selectedProject.value),
+)
 
 async function scrollToForm() {
   await nextTick()
@@ -123,8 +72,8 @@ function cancelForm() {
 function saveTask(values) {
   const isEditing = editingId.value !== null
   const saved = isEditing
-    ? updateTask({ id: editingId.value, ...values })
-    : addTask(values)
+    ? taskStore.updateTask({ id: editingId.value, ...values })
+    : taskStore.addTask(values)
 
   if (!saved) {
     feedback.value = 'Не вдалося зберегти завдання. Перевірте дані форми.'
@@ -136,36 +85,50 @@ function saveTask(values) {
   cancelForm()
 }
 
-// Видалення з підтвердженням. Використано діалог Framework7 замість
-// window.confirm: він не блокує сторінку та оформлений у стилі застосунку.
-function handleDelete(id) {
-  const task = taskState.tasks.find((item) => item.id === id)
-  if (!task) return
-
+function confirmDialog(title, text, okText, onOk) {
   f7.dialog.create({
-    title: 'Видалення завдання',
-    text: `Видалити завдання «${task.title}»?`,
-    cssClass: 'tf5-dialog',
+    title,
+    text,
     buttons: [
       { text: 'Скасувати' },
-      {
-        text: 'Видалити',
-        color: 'red',
-        bold: true,
-        onClick: () => {
-          if (deleteTask(id)) {
-            feedback.value = `Завдання «${task.title}» видалено.`
-            if (editingId.value === id) cancelForm()
-            if (selectedTask.value?.id === id) selectedTask.value = null
-          }
-        },
-      },
+      { text: okText, color: 'red', bold: true, onClick: onOk },
     ],
   }).open()
 }
 
-function handleTaskSelect(payload) {
-  selectedTask.value = selectedTask.value?.id === payload.id ? null : payload
+function handleDelete(id) {
+  const task = tasks.value.find((item) => item.id === Number(id))
+  if (!task) return
+  confirmDialog('Видалення завдання', `Видалити завдання «${task.title}»?`, 'Видалити', () => {
+    if (taskStore.deleteTask(id)) {
+      feedback.value = `Завдання «${task.title}» видалено.`
+      if (editingId.value === id) cancelForm()
+    }
+  })
+}
+
+function createProject() {
+  const project = projectStore.addProject(newProjectTitle.value)
+  if (!project) {
+    newProjectError.value = 'Назва: 3–40 символів. Не повторюйте назви проєктів.'
+    return
+  }
+  newProjectTitle.value = ''
+  newProjectError.value = ''
+  selectedProject.value = project.id
+  feedback.value = `Проєкт «${project.title}» створено та обрано у фільтрі.`
+}
+
+// Додаткове завдання 4: групове переведення завдань проєкту «У роботі»
+function startWholeProject() {
+  const id = selectedProject.value
+  if (id === 'all') return
+  const title = projectStore.projectTitle(id)
+  confirmDialog('Групова зміна статусу',
+    `Перевести всі завдання проєкту «${title}» у статус «У роботі»?`, 'Перевести', () => {
+      const changed = taskStore.startProjectTasks(id)
+      feedback.value = `Проєкт «${title}»: у роботу переведено завдань – ${changed}.`
+    })
 }
 </script>
 
@@ -176,8 +139,8 @@ function handleTaskSelect(payload) {
     <div class="tf3-container">
       <section class="tf3-hero">
         <div class="tf3-eyebrow">TASKFLOW / TASK MANAGER</div>
-        <h1>Керування завданнями</h1>
-        <p>Створюйте, редагуйте, знаходьте, сортуйте та видаляйте завдання.</p>
+        <h1>Керування завданнями і проєктами</h1>
+        <p>Pinia забезпечує спільний стан між вкладками без перезавантаження.</p>
         <button type="button" class="tf5-btn tf5-btn--primary tf5-new" @click="startCreate">
           + Додати завдання
         </button>
@@ -185,10 +148,44 @@ function handleTaskSelect(payload) {
 
       <p v-if="feedback" class="tf4-feedback" role="status">{{ feedback }}</p>
 
+      <section class="tf5-panel tf6-project-panel" aria-label="Проєкти">
+        <h2>Мої проєкти</h2>
+        <div class="tf6-project-list">
+          <button v-for="project in projectStats" :key="project.id" type="button"
+                  class="tf6-project-pill" :class="{ 'is-active': selectedProject === project.id }"
+                  @click="selectedProject = selectedProject === project.id ? 'all' : project.id">
+            {{ project.title }} <strong>{{ project.taskCount }}</strong>
+            <span class="tf6-pill-percent">{{ project.donePercent }}%</span>
+          </button>
+        </div>
+        <form class="tf6-project-form" @submit.prevent="createProject">
+          <label>
+            Назва нового проєкту
+            <input
+              v-model="newProjectTitle"
+              type="text"
+              maxlength="40"
+              placeholder="Наприклад: Лабораторні"
+              @input="newProjectError = ''"
+            />
+          </label>
+          <button type="submit" class="tf5-btn tf5-btn--primary">Створити проєкт</button>
+        </form>
+        <p v-if="newProjectError" class="tf5-error" role="alert">{{ newProjectError }}</p>
+
+        <div v-if="activeProjectTitle" class="tf6-bulk">
+          <span>Обрано проєкт: <b>{{ activeProjectTitle }}</b></span>
+          <button type="button" class="tf5-btn" @click="startWholeProject">
+            Усі завдання проєкту → «У роботі»
+          </button>
+        </div>
+      </section>
+
       <section v-if="showForm" ref="formAnchor" class="tf4-form-section">
         <TaskForm
           :key="editingId ?? 'new'"
           :task="editingTask"
+          :projects="projects"
           @save="saveTask"
           @cancel="cancelForm"
         />
@@ -198,9 +195,12 @@ function handleTaskSelect(payload) {
         v-model:search="searchText"
         v-model:status="selectedStatus"
         v-model:priority="selectedPriority"
+        v-model:project="selectedProject"
         v-model:sort="sortOrder"
         v-model:onlyActive="onlyActive"
-        @reset="resetFilters"
+        v-model:onlyNoDueDate="onlyNoDueDate"
+        :projects="projects"
+        @reset="taskStore.resetFilters"
       />
 
       <section class="tf3-section">
@@ -210,15 +210,9 @@ function handleTaskSelect(payload) {
             <h2>Список завдань</h2>
           </div>
           <div class="tf5-counters">
-            <div class="tf3-counter">
-              Показано: {{ visibleTasks.length }} із {{ taskState.tasks.length }}
-            </div>
+            <div class="tf3-counter">Показано: {{ visibleTasks.length }} із {{ tasks.length }}</div>
             <div class="tf3-counter tf5-percent">Виконано: {{ visibleDonePercent }}%</div>
           </div>
-        </div>
-
-        <div v-if="selectedTask" class="tf3-selected">
-          Обрано завдання: <b>{{ selectedTask.title }}</b>
         </div>
 
         <div v-if="visibleTasks.length" class="tf3-task-grid">
@@ -226,29 +220,22 @@ function handleTaskSelect(payload) {
             v-for="task in visibleTasks"
             :key="task.id"
             :task="task"
+            :project-title="projectStore.projectTitle(task.projectId)"
             :editable="true"
-            :selected="selectedTask?.id === task.id"
-            @status-change="setTaskStatus"
-            @priority-change="setTaskPriority"
+            @status-change="taskStore.setTaskStatus"
+            @priority-change="taskStore.setTaskPriority"
             @edit="startEdit"
             @delete="handleDelete"
-            @task-select="handleTaskSelect"
           />
         </div>
-
-        <!-- Додаткове завдання 5: окреме пояснення, якщо завдань не залишилося -->
-        <div v-else-if="!taskState.tasks.length" class="tf5-empty">
+        <div v-else-if="!tasks.length" class="tf5-empty">
           <p><b>Список завдань порожній.</b></p>
-          <p>Усі завдання видалено. Натисніть «+ Додати завдання», щоб створити нове,
-            або оновіть сторінку, щоб повернути демонстраційні дані.</p>
-          <button type="button" class="tf5-btn tf5-btn--primary" @click="startCreate">
-            + Додати завдання
-          </button>
+          <p>Усі завдання видалено. Створіть нове або оновіть сторінку.</p>
+          <button type="button" class="tf5-btn tf5-btn--primary" @click="startCreate">+ Додати завдання</button>
         </div>
-
         <div v-else class="tf5-empty">
           <p>За поточними умовами завдань не знайдено.</p>
-          <button type="button" class="tf5-btn" @click="resetFilters">
+          <button type="button" class="tf5-btn" @click="taskStore.resetFilters">
             Показати всі завдання
           </button>
         </div>

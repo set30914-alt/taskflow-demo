@@ -1,10 +1,13 @@
 <script setup>
 import { computed, reactive, ref } from 'vue'
-import { isTitleTaken } from '../store/tasks'
+import { useTasksStore } from '../store/tasks'
 
 const props = defineProps({
   task: { type: Object, default: null },
+  projects: { type: Array, required: true },
 })
+const taskStore = useTasksStore()
+const isTitleTaken = (title, exceptId) => taskStore.isTitleTaken(title, exceptId)
 const emit = defineEmits(['save', 'cancel'])
 
 const defaults = () => ({
@@ -14,6 +17,7 @@ const defaults = () => ({
   priority: 'medium',
   dueDate: '',
   category: 'study',
+  projectId: 'general',
 })
 
 // Копіюємо поля: форма не змінює вихідний об'єкт до натискання «Зберегти».
@@ -24,6 +28,7 @@ const form = reactive({
   priority: props.task?.priority ?? 'medium',
   dueDate: props.task?.dueDate ?? '',
   category: props.task?.category ?? 'study',
+  projectId: props.task?.projectId ?? 'general',
 })
 
 const showErrors = ref(false)
@@ -70,12 +75,17 @@ const errors = computed(() => {
   if (!['low', 'medium', 'high'].includes(form.priority)) {
     result.priority = 'Оберіть коректний пріоритет.'
   }
-  if (!isValidDate(form.dueDate)) {
+  if (!form.dueDate) {
+    // Термін необов'язковий: завдання без дати сортуються в кінець списку.
+  } else if (!isValidDate(form.dueDate)) {
     result.dueDate = 'Укажіть коректну дату завершення.'
   } else if (form.dueDate < todayIso() && (!isEditing.value || form.dueDate !== props.task.dueDate)) {
     // Додаткове завдання 2: нова дата не може бути в минулому.
     // Для старих завдань дозволено зберегти їхню наявну дату без змін.
     result.dueDate = 'Дата завершення не може бути в минулому.'
+  }
+  if (!props.projects.some((project) => project.id === form.projectId)) {
+    result.projectId = 'Оберіть проєкт зі списку.'
   }
   return result
 })
@@ -93,6 +103,7 @@ function submitForm() {
     priority: form.priority,
     dueDate: form.dueDate,
     category: form.category,
+    projectId: form.projectId,
   })
 }
 
@@ -168,6 +179,18 @@ function resetForm() {
       </div>
 
       <div class="tf4-field">
+        <label for="tf4-project">Проєкт <span class="tf4-req" aria-hidden="true">*</span></label>
+        <select id="tf4-project" v-model="form.projectId" aria-required="true"
+                :aria-invalid="showErrors && !!errors.projectId"
+                aria-describedby="tf4-project-error">
+          <option v-for="project in projects" :key="project.id" :value="project.id">
+            {{ project.title }}
+          </option>
+        </select>
+        <p v-if="showErrors && errors.projectId" id="tf4-project-error" class="tf4-error">{{ errors.projectId }}</p>
+      </div>
+
+      <div class="tf4-field">
         <label for="tf4-category">Категорія</label>
         <select id="tf4-category" v-model="form.category">
           <option value="study">Навчання</option>
@@ -177,8 +200,8 @@ function resetForm() {
       </div>
 
       <div class="tf4-field">
-        <label for="tf4-date">Дата завершення <span class="tf4-req" aria-hidden="true">*</span></label>
-        <input id="tf4-date" v-model="form.dueDate" type="date" aria-required="true"
+        <label for="tf4-date">Дата завершення</label>
+        <input id="tf4-date" v-model="form.dueDate" type="date"
                :min="isEditing ? undefined : minDate"
                :aria-invalid="showErrors && !!errors.dueDate"
                aria-describedby="tf4-date-error" />
@@ -187,10 +210,14 @@ function resetForm() {
         </p>
       </div>
 
+      <div class="tf4-field tf4-date-hint">
+        <small>Необов’язкове поле. Без дати завдання потрапляє у фільтр «Лише без терміну».</small>
+      </div>
+
       <div class="tf4-preview tf4-field--wide" aria-live="polite">
         <strong>Попередній перегляд</strong>
         <p>{{ form.title || 'Назва нового завдання' }}</p>
-        <span>{{ statusLabels[form.status] }} · {{ priorityLabels[form.priority] }} · {{ categoryLabels[form.category] }}<template v-if="form.dueDate"> · до {{ form.dueDate }}</template></span>
+        <span>{{ statusLabels[form.status] }} · {{ priorityLabels[form.priority] }} · {{ categoryLabels[form.category] }} · {{ projects.find((p) => p.id === form.projectId)?.title }}<template v-if="form.dueDate"> · до {{ form.dueDate }}</template></span>
       </div>
 
       <div class="tf4-actions tf4-field--wide">

@@ -1,35 +1,22 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import AppTabbar from '../components/AppTabbar.vue'
 import TaskCard from '../components/TaskCard.vue'
 import TaskCounter from '../components/TaskCounter.vue'
-import { taskState, setTaskStatus, setTaskPriority } from '../store/tasks'
+import { useTasksStore } from '../store/tasks'
+import { useProjectsStore } from '../store/projects'
 import '../css/task-components.css'
+import '../css/task-list.css'
 
-const countBy = (status) => taskState.tasks.filter((task) => task.status === status).length
+const taskStore = useTasksStore()
+const projectStore = useProjectsStore()
+const {
+  totalTasks, completedTasks, progressTasks, todoTasks, completionPercent, activeTasks,
+} = storeToRefs(taskStore)
+const { projectCount, projectStats } = storeToRefs(projectStore)
 
-const totalTasks = computed(() => taskState.tasks.length)
-const completedTasks = computed(() => countBy('done'))
-const progressTasks = computed(() => countBy('progress'))
-const todoTasks = computed(() => countBy('todo')) // додаткове завдання 2
-
-// Додаткове завдання 4: відсоток виконаних завдань
-const completionPercent = computed(() => (totalTasks.value
-  ? Math.round((completedTasks.value / totalTasks.value) * 100) : 0))
-
-const activeTasks = computed(() => {
-  const order = { high: 0, medium: 1, low: 2 }
-  return taskState.tasks.filter((task) => task.status !== 'done')
-    .sort((a, b) => order[a.priority] - order[b.priority]).slice(0, 3)
-})
-
-function handleStatusChange(payload) { setTaskStatus(payload) }
-function handlePriorityChange(payload) { setTaskPriority(payload) }
-
-// Додаткове завдання 5: обробка події task-select
-const selectedTask = ref(null)
-function handleTaskSelect(payload) {
-  selectedTask.value = selectedTask.value?.id === payload.id ? null : payload
+function projectTitleFor(task) {
+  return projectStore.projectTitle(task.projectId)
 }
 </script>
 
@@ -43,7 +30,7 @@ function handleTaskSelect(payload) {
       <section class="tf3-hero">
         <div class="tf3-eyebrow">TASKFLOW / DASHBOARD</div>
         <h1>Панель керування</h1>
-        <p>Контролюйте виконання завдань та їхні пріоритети.</p>
+        <p>Контролюйте виконання завдань і пріоритети. Проєктів: {{ projectCount }}.</p>
       </section>
 
       <section class="tf3-stat-grid">
@@ -63,6 +50,28 @@ function handleTaskSelect(payload) {
         </div>
       </section>
 
+      <!-- Додаткові завдання 2 і 3: проєкти з невиконаними завданнями та відсотком -->
+      <section class="tf3-section">
+        <div class="tf3-section-heading">
+          <div>
+            <div class="tf3-eyebrow">PROJECTS</div>
+            <h2>Проєкти</h2>
+          </div>
+        </div>
+        <div class="tf6-home-projects">
+          <div v-for="project in projectStats" :key="project.id" class="tf6-home-project">
+            <div class="tf6-home-project-title">{{ project.title }}</div>
+            <div class="tf6-home-project-meta">
+              Невиконаних: <b>{{ project.openCount }}</b> із {{ project.taskCount }}
+            </div>
+            <div class="tf3-progress-track tf6-mini-track">
+              <div class="tf3-progress-fill" :style="{ width: project.donePercent + '%' }"></div>
+            </div>
+            <div class="tf6-home-project-percent">{{ project.donePercent }}% виконано</div>
+          </div>
+        </div>
+      </section>
+
       <section class="tf3-section">
         <div class="tf3-section-heading">
           <div>
@@ -71,19 +80,17 @@ function handleTaskSelect(payload) {
           </div>
           <f7-button href="/tasks/" outline small>Переглянути всі</f7-button>
         </div>
-
-        <div v-if="selectedTask" class="tf3-selected">
-          Обрано завдання: <b>{{ selectedTask.title }}</b>
-        </div>
-
         <div v-if="activeTasks.length" class="tf3-task-grid">
-          <TaskCard v-for="task in activeTasks" :key="task.id" :task="task"
-                    :selected="selectedTask?.id === task.id"
-                    @status-change="handleStatusChange"
-                    @priority-change="handlePriorityChange"
-                    @task-select="handleTaskSelect" />
+          <TaskCard
+            v-for="task in activeTasks"
+            :key="task.id"
+            :task="task"
+            :project-title="projectTitleFor(task)"
+            @status-change="taskStore.setTaskStatus"
+            @priority-change="taskStore.setTaskPriority"
+          />
         </div>
-        <div v-else class="tf3-empty">Наразі всі завдання виконані.</div>
+        <div v-else class="tf5-empty">Наразі всі завдання виконані.</div>
       </section>
     </div>
 

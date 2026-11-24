@@ -3,16 +3,21 @@ defineProps({
   search: { type: String, default: '' },
   status: { type: String, default: 'all' },
   priority: { type: String, default: 'all' },
+  project: { type: String, default: 'all' },
   sort: { type: String, default: 'newest' },
   onlyActive: { type: Boolean, default: false },
+  onlyNoDueDate: { type: Boolean, default: false },
+  projects: { type: Array, required: true },
 })
 
 const emit = defineEmits([
   'update:search',
   'update:status',
   'update:priority',
+  'update:project',
   'update:sort',
   'update:onlyActive',
+  'update:onlyNoDueDate',
   'reset',
 ])
 </script>
@@ -58,6 +63,16 @@ const emit = defineEmits([
       </label>
 
       <label>
+        Проєкт
+        <select :value="project" @change="emit('update:project', $event.target.value)">
+          <option value="all">Усі проєкти</option>
+          <option v-for="item in projects" :key="item.id" :value="item.id">
+            {{ item.title }}
+          </option>
+        </select>
+      </label>
+
+      <label>
         Сортування
         <select :value="sort" @change="emit('update:sort', $event.target.value)">
           <option value="newest">Спочатку нові</option>
@@ -76,6 +91,16 @@ const emit = defineEmits([
                 :class="{ 'is-on': onlyActive }" :aria-pressed="onlyActive"
                 @click="emit('update:onlyActive', !onlyActive)">
           Тільки невиконані
+        </button>
+      </div>
+
+      <!-- Додаткове завдання 5: фільтр у Pinia state -->
+      <div class="tf5-quick">
+        <span>Термін</span>
+        <button type="button" class="tf5-btn tf5-toggle"
+                :class="{ 'is-on': onlyNoDueDate }" :aria-pressed="onlyNoDueDate"
+                @click="emit('update:onlyNoDueDate', !onlyNoDueDate)">
+          Лише без терміну
         </button>
       </div>
     </div>
