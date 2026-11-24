@@ -1,4 +1,6 @@
 /* Палітра TaskFlow */
+/* Framework7 задає кнопкам width: 100%, повертаємо природну ширину */
+.tf3-filter-button, .tf3-action, .tf3-title-button { width: auto; }
 .tf3-page { --f7-page-bg-color: #0b1423; }
 .tf3-container { box-sizing: border-box; width: 100%; max-width: 1180px;
   margin: 0 auto; padding: 20px 18px 110px; color: #edf4ff; }
