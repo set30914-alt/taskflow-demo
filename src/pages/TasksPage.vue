@@ -31,7 +31,9 @@
       </p>
     </div>
 
-    <AppTabbar active="tasks" />
+    <template #fixed>
+      <AppTabbar active="tasks" />
+    </template>
   </f7-page>
 </template>
 

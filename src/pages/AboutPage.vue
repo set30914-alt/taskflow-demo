@@ -31,7 +31,9 @@
       </f7-button>
     </div>
 
-    <AppTabbar active="about" />
+    <template #fixed>
+      <AppTabbar active="about" />
+    </template>
   </f7-page>
 </template>
 
