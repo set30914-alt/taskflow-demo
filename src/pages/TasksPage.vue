@@ -1,67 +1,99 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { ref, computed, nextTick } from 'vue'
+import { f7 } from 'framework7-vue/bundle'
 import AppTabbar from '../components/AppTabbar.vue'
 import TaskCard from '../components/TaskCard.vue'
 import TaskForm from '../components/TaskForm.vue'
+import TaskListControls from '../components/TaskListControls.vue'
 import {
   taskState,
   addTask,
   updateTask,
+  deleteTask,
   setTaskStatus,
   setTaskPriority,
 } from '../store/tasks'
 import '../css/task-components.css'
 import '../css/task-form.css'
+import '../css/task-list.css'
 
+const searchText = ref('')
 const selectedStatus = ref('all')
 const selectedPriority = ref('all')
-const sortMode = ref('default')
-const searchQuery = ref('') // додаткове завдання 6
-const formVisible = ref(false)
+const sortOrder = ref('newest')
+const onlyActive = ref(false) // додаткове завдання 1
+
+const showForm = ref(false)
 const editingId = ref(null)
 const formAnchor = ref(null)
 const feedback = ref('')
 const selectedTask = ref(null)
 
-const statusOptions = [
-  { value: 'all', label: 'Усі' },
-  { value: 'todo', label: 'Заплановано' },
-  { value: 'progress', label: 'У роботі' },
-  { value: 'done', label: 'Виконано' },
-]
-const priorityOptions = [
-  { value: 'all', label: 'Усі' },
-  { value: 'low', label: 'Низький' },
-  { value: 'medium', label: 'Середній' },
-  { value: 'high', label: 'Високий' },
-]
-const sortOptions = [
-  { value: 'default', label: 'Без сортування' },
-  { value: 'priority-desc', label: 'Спочатку високий' },
-  { value: 'priority-asc', label: 'Спочатку низький' },
-]
-const priorityWeight = { high: 3, medium: 2, low: 1 }
+const editingTask = computed(
+  () => taskState.tasks.find((task) => task.id === editingId.value) ?? null,
+)
 
-const filteredTasks = computed(() => {
-  const query = searchQuery.value.trim().toLocaleLowerCase('uk-UA')
-  const list = taskState.tasks.filter((task) => (
-    (selectedStatus.value === 'all' || task.status === selectedStatus.value) &&
-    (selectedPriority.value === 'all' || task.priority === selectedPriority.value) &&
-    (!query || task.title.toLocaleLowerCase('uk-UA').includes(query))
-  ))
-  if (sortMode.value === 'default') return list
-  const dir = sortMode.value === 'priority-desc' ? -1 : 1
-  return [...list].sort((a, b) => dir * (priorityWeight[a.priority] - priorityWeight[b.priority]))
+// Додаткове завдання 2: порядок статусів «У роботі» → «Заплановано» → «Виконано»
+const statusWeight = { progress: 0, todo: 1, done: 2 }
+
+const visibleTasks = computed(() => {
+  const term = searchText.value.trim().toLocaleLowerCase('uk-UA')
+  const priorityWeight = { high: 3, medium: 2, low: 1 }
+
+  // filter() створює новий масив: вихідний стан не змінюється.
+  const result = taskState.tasks.filter((task) => {
+    const matchesText = !term ||
+      `${task.title} ${task.description ?? ''}`.toLocaleLowerCase('uk-UA').includes(term)
+    const matchesStatus =
+      selectedStatus.value === 'all' || task.status === selectedStatus.value
+    const matchesPriority =
+      selectedPriority.value === 'all' || task.priority === selectedPriority.value
+    const matchesActive = !onlyActive.value || task.status !== 'done'
+
+    return matchesText && matchesStatus && matchesPriority && matchesActive
+  })
+
+  // Сортуємо лише копію, щоб не змінювати taskState.tasks.
+  return result.sort((a, b) => {
+    if (sortOrder.value === 'title') {
+      return a.title.localeCompare(b.title, 'uk-UA') || a.id - b.id
+    }
+    if (sortOrder.value === 'priority') {
+      return priorityWeight[b.priority] - priorityWeight[a.priority] || b.id - a.id
+    }
+    if (sortOrder.value === 'dueDate') {
+      // Порожні дати завжди після заповнених.
+      const first = a.dueDate || '9999-12-31'
+      const second = b.dueDate || '9999-12-31'
+      return first.localeCompare(second) || b.id - a.id
+    }
+    if (sortOrder.value === 'dueDateDesc') {
+      // Додаткове завдання 6: зворотний порядок, порожні дати наприкінці.
+      if (!a.dueDate && !b.dueDate) return b.id - a.id
+      if (!a.dueDate) return 1
+      if (!b.dueDate) return -1
+      return b.dueDate.localeCompare(a.dueDate) || b.id - a.id
+    }
+    if (sortOrder.value === 'status') {
+      return statusWeight[a.status] - statusWeight[b.status] || b.id - a.id
+    }
+    return b.id - a.id
+  })
 })
 
-const editingTask = computed(() => (
-  taskState.tasks.find((task) => task.id === editingId.value) ?? null
-))
+// Додаткове завдання 3: частка виконаних серед знайдених
+const visibleDonePercent = computed(() => {
+  if (!visibleTasks.value.length) return 0
+  const done = visibleTasks.value.filter((task) => task.status === 'done').length
+  return Math.round((done / visibleTasks.value.length) * 100)
+})
 
-function handleStatusChange(payload) { setTaskStatus(payload) }
-function handlePriorityChange(payload) { setTaskPriority(payload) }
-function handleTaskSelect(payload) {
-  selectedTask.value = selectedTask.value?.id === payload.id ? null : payload
+function resetFilters() {
+  searchText.value = ''
+  selectedStatus.value = 'all'
+  selectedPriority.value = 'all'
+  sortOrder.value = 'newest'
+  onlyActive.value = false
 }
 
 async function scrollToForm() {
@@ -69,43 +101,71 @@ async function scrollToForm() {
   formAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-async function createTask() {
+async function startCreate() {
   editingId.value = null
-  formVisible.value = true
+  showForm.value = true
   feedback.value = ''
   await scrollToForm()
 }
 
-async function editTask(id) {
+async function startEdit(id) {
   editingId.value = id
-  formVisible.value = true
+  showForm.value = true
   feedback.value = ''
   await scrollToForm()
 }
 
 function cancelForm() {
-  formVisible.value = false
   editingId.value = null
+  showForm.value = false
 }
 
-function saveTask(data) {
+function saveTask(values) {
   const isEditing = editingId.value !== null
   const saved = isEditing
-    ? updateTask({ id: editingId.value, ...data })
-    : addTask(data)
+    ? updateTask({ id: editingId.value, ...values })
+    : addTask(values)
 
   if (!saved) {
     feedback.value = 'Не вдалося зберегти завдання. Перевірте дані форми.'
     return
   }
-
   feedback.value = isEditing
     ? `Завдання «${saved.title}» оновлено.`
     : `Завдання «${saved.title}» створено.`
   cancelForm()
-  selectedStatus.value = 'all'
-  selectedPriority.value = 'all'
-  searchQuery.value = ''
+}
+
+// Видалення з підтвердженням. Використано діалог Framework7 замість
+// window.confirm: він не блокує сторінку та оформлений у стилі застосунку.
+function handleDelete(id) {
+  const task = taskState.tasks.find((item) => item.id === id)
+  if (!task) return
+
+  f7.dialog.create({
+    title: 'Видалення завдання',
+    text: `Видалити завдання «${task.title}»?`,
+    cssClass: 'tf5-dialog',
+    buttons: [
+      { text: 'Скасувати' },
+      {
+        text: 'Видалити',
+        color: 'red',
+        bold: true,
+        onClick: () => {
+          if (deleteTask(id)) {
+            feedback.value = `Завдання «${task.title}» видалено.`
+            if (editingId.value === id) cancelForm()
+            if (selectedTask.value?.id === id) selectedTask.value = null
+          }
+        },
+      },
+    ],
+  }).open()
+}
+
+function handleTaskSelect(payload) {
+  selectedTask.value = selectedTask.value?.id === payload.id ? null : payload
 }
 </script>
 
@@ -116,57 +176,32 @@ function saveTask(data) {
     <div class="tf3-container">
       <section class="tf3-hero">
         <div class="tf3-eyebrow">TASKFLOW / TASK MANAGER</div>
-        <h1>Мої завдання</h1>
-        <p>Керуйте завданнями, статусами та пріоритетами.</p>
-        <button type="button" class="tf4-new-task" @click="createTask">
+        <h1>Керування завданнями</h1>
+        <p>Створюйте, редагуйте, знаходьте, сортуйте та видаляйте завдання.</p>
+        <button type="button" class="tf5-btn tf5-btn--primary tf5-new" @click="startCreate">
           + Додати завдання
         </button>
       </section>
 
       <p v-if="feedback" class="tf4-feedback" role="status">{{ feedback }}</p>
 
-      <section v-if="formVisible" ref="formAnchor" class="tf4-form-section">
-        <TaskForm :key="editingId ?? 'new'" :task="editingTask"
-                  @save="saveTask" @cancel="cancelForm" />
+      <section v-if="showForm" ref="formAnchor" class="tf4-form-section">
+        <TaskForm
+          :key="editingId ?? 'new'"
+          :task="editingTask"
+          @save="saveTask"
+          @cancel="cancelForm"
+        />
       </section>
 
-      <section class="tf3-filters">
-        <div class="tf4-search">
-          <label class="tf3-filter-title" for="tf4-search">Пошук за назвою</label>
-          <input id="tf4-search" v-model="searchQuery" type="search"
-                 placeholder="Почніть вводити назву завдання…" />
-        </div>
-        <div class="tf3-filter-group">
-          <div class="tf3-filter-title">Фільтр за статусом</div>
-          <div class="tf3-filter-buttons">
-            <button v-for="option in statusOptions" :key="option.value"
-                    type="button" class="tf3-filter-button"
-                    :class="{ 'is-active': selectedStatus === option.value }"
-                    :aria-pressed="selectedStatus === option.value"
-                    @click="selectedStatus = option.value">{{ option.label }}</button>
-          </div>
-        </div>
-        <div class="tf3-filter-group">
-          <div class="tf3-filter-title">Фільтр за пріоритетом</div>
-          <div class="tf3-filter-buttons">
-            <button v-for="option in priorityOptions" :key="option.value"
-                    type="button" class="tf3-filter-button"
-                    :class="{ 'is-active': selectedPriority === option.value }"
-                    :aria-pressed="selectedPriority === option.value"
-                    @click="selectedPriority = option.value">{{ option.label }}</button>
-          </div>
-        </div>
-        <div class="tf3-filter-group">
-          <div class="tf3-filter-title">Сортування за пріоритетом</div>
-          <div class="tf3-filter-buttons">
-            <button v-for="option in sortOptions" :key="option.value"
-                    type="button" class="tf3-filter-button"
-                    :class="{ 'is-active': sortMode === option.value }"
-                    :aria-pressed="sortMode === option.value"
-                    @click="sortMode = option.value">{{ option.label }}</button>
-          </div>
-        </div>
-      </section>
+      <TaskListControls
+        v-model:search="searchText"
+        v-model:status="selectedStatus"
+        v-model:priority="selectedPriority"
+        v-model:sort="sortOrder"
+        v-model:onlyActive="onlyActive"
+        @reset="resetFilters"
+      />
 
       <section class="tf3-section">
         <div class="tf3-section-heading">
@@ -174,24 +209,48 @@ function saveTask(data) {
             <div class="tf3-eyebrow">TASK LIST</div>
             <h2>Список завдань</h2>
           </div>
-          <div class="tf3-counter">Знайдено: {{ filteredTasks.length }}</div>
+          <div class="tf5-counters">
+            <div class="tf3-counter">
+              Показано: {{ visibleTasks.length }} із {{ taskState.tasks.length }}
+            </div>
+            <div class="tf3-counter tf5-percent">Виконано: {{ visibleDonePercent }}%</div>
+          </div>
         </div>
 
         <div v-if="selectedTask" class="tf3-selected">
           Обрано завдання: <b>{{ selectedTask.title }}</b>
         </div>
 
-        <div v-if="filteredTasks.length" class="tf3-task-grid">
-          <TaskCard v-for="task in filteredTasks" :key="task.id"
-                    :task="task" :editable="true"
-                    :selected="selectedTask?.id === task.id"
-                    @status-change="handleStatusChange"
-                    @priority-change="handlePriorityChange"
-                    @task-select="handleTaskSelect"
-                    @edit="editTask" />
+        <div v-if="visibleTasks.length" class="tf3-task-grid">
+          <TaskCard
+            v-for="task in visibleTasks"
+            :key="task.id"
+            :task="task"
+            :editable="true"
+            :selected="selectedTask?.id === task.id"
+            @status-change="setTaskStatus"
+            @priority-change="setTaskPriority"
+            @edit="startEdit"
+            @delete="handleDelete"
+            @task-select="handleTaskSelect"
+          />
         </div>
-        <div v-else class="tf3-empty">
-          За обраними фільтрами завдань не знайдено.
+
+        <!-- Додаткове завдання 5: окреме пояснення, якщо завдань не залишилося -->
+        <div v-else-if="!taskState.tasks.length" class="tf5-empty">
+          <p><b>Список завдань порожній.</b></p>
+          <p>Усі завдання видалено. Натисніть «+ Додати завдання», щоб створити нове,
+            або оновіть сторінку, щоб повернути демонстраційні дані.</p>
+          <button type="button" class="tf5-btn tf5-btn--primary" @click="startCreate">
+            + Додати завдання
+          </button>
+        </div>
+
+        <div v-else class="tf5-empty">
+          <p>За поточними умовами завдань не знайдено.</p>
+          <button type="button" class="tf5-btn" @click="resetFilters">
+            Показати всі завдання
+          </button>
         </div>
       </section>
     </div>
