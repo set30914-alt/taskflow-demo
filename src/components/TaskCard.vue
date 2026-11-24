@@ -5,15 +5,18 @@ import PriorityBadge from './PriorityBadge.vue'
 
 const props = defineProps({
   task: { type: Object, required: true },
+  editable: { type: Boolean, default: false },
   selected: { type: Boolean, default: false },
 })
-const emit = defineEmits(['status-change', 'priority-change', 'task-select'])
+const emit = defineEmits(['status-change', 'priority-change', 'edit', 'task-select'])
 
 const statusSequence = ['todo', 'progress', 'done']
 const prioritySequence = ['low', 'medium', 'high']
+const categoryLabels = { study: 'Навчання', work: 'Робота', personal: 'Особисте' }
 
 const statusActionText = computed(() => ({
-  todo: 'Взяти в роботу', progress: 'Завершити',
+  todo: 'Взяти в роботу',
+  progress: 'Завершити',
   done: 'Повернути в план',
 })[props.task.status] || 'Змінити статус')
 
@@ -42,7 +45,6 @@ function changePriority() {
   })
 }
 
-// Додаткове завдання 5: подія вибору картки
 function selectTask() {
   emit('task-select', { id: props.task.id, title: props.task.title })
 }
@@ -62,6 +64,7 @@ function selectTask() {
         <div class="tf3-meta-item">
           <span class="tf3-meta-label">Пріоритет:</span>
           <PriorityBadge :priority="task.priority" />
+          <span v-if="task.category" class="tf3-badge tf4-category">{{ categoryLabels[task.category] }}</span>
         </div>
         <div class="tf3-meta-date">Термін: {{ formattedDate }}</div>
       </div>
@@ -70,6 +73,8 @@ function selectTask() {
                 @click="changeStatus">{{ statusActionText }}</button>
         <button type="button" class="tf3-action"
                 @click="changePriority">Змінити пріоритет</button>
+        <button v-if="editable" type="button" class="tf3-action"
+                @click="emit('edit', task.id)">Редагувати</button>
       </div>
     </f7-card-content>
   </f7-card>
